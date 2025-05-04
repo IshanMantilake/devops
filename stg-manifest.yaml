@@ -1,0 +1,802 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: umas
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: settings
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eniro
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eniro-demo
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: invoicing
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: charging
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: log
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: umas
+  name: umas-net
+spec:
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              umas-net: "true"
+  podSelector:
+    matchLabels:
+      umas-net: "true"
+
+---
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: retaining-storage
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  encrypted: "true"
+reclaimPolicy: Retain
+
+---
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eks-admin
+  namespace: kube-system
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eks-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: eks-admin
+    namespace: kube-system
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: default
+  name: default-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+    prometheus.io/port: '10254'
+    prometheus.io/scrape: 'true'
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http: &webrenderer_rules
+        paths:
+          - path: /sms-service(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: ic3-sms-service
+                port: 
+                  number: 80
+          - path: /web-renderer-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-web-renderer
+                port: 
+                  number: 80
+          - path: /consumer-notification-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-consumer-notification
+                port: 
+                  number: 80
+    - host: stg-credit-internal.valitive.com
+      http: *webrenderer_rules
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: invoicing
+  name: invoicing-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+    nginx.ingress.kubernetes.io/rewrite-target: /invoicing-v1/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /invoicing-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-invoicing-service
+                port: 
+                  number: 80
+
+---
+
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    namespace: charging
+    name: charging-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+      nginx.ingress.kubernetes.io/rewrite-target: /charging-v1/$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      # kubernetes.io/ingress.class: "nginx-internal"
+  spec:
+    ingressClassName: internal-lb
+    tls:
+      - hosts:
+          - icatch.se
+        secretName: tls-secret-icatch-se
+    rules:
+      - host: stg-north1.icatch.se
+        http:
+          paths:
+            - path: /charging-v1(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-charging-service
+                  port: 
+                    number: 80
+
+---
+
+
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    namespace: charging
+    name: charging-actuator-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+      nginx.ingress.kubernetes.io/rewrite-target: /actuator/$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      # kubernetes.io/ingress.class: "nginx-internal"
+  spec:
+    ingressClassName: internal-lb
+    tls:
+      - hosts:
+          - icatch.se
+        secretName: tls-secret-icatch-se
+    rules:
+      - host: stg-north1.icatch.se
+        http:
+          paths:
+            - path: /charging(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-charging-service
+                  port: 
+                    number: 80
+
+---
+
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    namespace: charging
+    name: charging-worker-actuator-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+      nginx.ingress.kubernetes.io/rewrite-target: /actuator/$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      # kubernetes.io/ingress.class: "nginx-internal"
+  spec:
+    ingressClassName: internal-lb
+    tls:
+      - hosts:
+          - icatch.se
+        secretName: tls-secret-icatch-se
+    rules:
+      - host: stg-north1.icatch.se
+        http:
+          paths:
+            - path: /charging-worker(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-charging-worker
+                  port: 
+                    number: 80
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: kubernetes-dashboard
+  name: kube-dashboard-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/add-base-url: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/configuration-snippet: rewrite ^(/dashboard)$ $1/ permanent;
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /dashboard(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-dashboard
+                port: 
+                  number: 8443
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: umas
+  name: umas-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN";
+      add_header X-Content-Type-Options nosniff;
+      add_header Referrer-Policy 'same-origin';
+      add_header X-XSS-Protection "1; mode=block";
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/modsecurity-transaction-id: "$request_id"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecAuditLogFormat JSON
+      SecStatusEngine Off
+      SecAction \
+      "id:949110,\
+        setvar:tx.inbound_anomaly_score_threshold=7,\
+        setvar:tx.outbound_anomaly_score_threshold=4"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se 
+      http: &appsettings_rules
+        paths:
+          - path: /umas-ui(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: umas-ui
+                port: 
+                  number: 80
+          - path: /umas-auth(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: umas-auth
+                port: 
+                  number: 80
+          - path: /umas-service(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service: 
+                name: umas-service
+                port: 
+                  number: 80
+          - path: /user-app-settings-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service: 
+                name: vltv-user-app-settings
+                port: 
+                  number: 80
+    - host: stg-credit.valitive.com
+      http: *appsettings_rules
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: umas
+  name: umas-auth-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/modsecurity-transaction-id: "$request_id"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecAuditLogFormat JSON
+      SecStatusEngine Off
+      SecAction \
+      "id:949110,\
+        setvar:tx.inbound_anomaly_score_threshold=11,\
+        setvar:tx.outbound_anomaly_score_threshold=4"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - secretName: tls-secret-itesco-com
+    - secretName: tls-secret-valitive-com
+  rules:
+    - host: stg-auth.itesco.com
+      http: &auth_rules
+        paths:
+          - path:  /(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: umas-auth
+                port: 
+                  number: 80
+    - host: stg-auth.valitive.com
+      http: *auth_rules
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: tr-log-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /tr-log-v1/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /tr-log-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-tr-log-service
+                port: 
+                  number: 80
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: tr-log-actuator-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /actuator/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /tr-log(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-tr-log-service
+                port:
+                  number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: evt-log-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /evt-log-v1/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /evt-log-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-evt-log-service
+                port: 
+                  number: 80
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: evt-log-actuator-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /actuator/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /evt-log(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-evt-log-service
+                port:
+                  number: 80
+                  
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: udr-log-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /udr-log-v1/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /udr-log-v1(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-udr-log-service
+                port:
+                  number: 80
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: log
+  name: udr-log-actuator-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /actuator/$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+          - path: /udr-log(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-udr-log-service
+                port:
+                  number: 80
+---
+
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    namespace: shipment
+    name: shipment-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+      nginx.ingress.kubernetes.io/use-regex: "true"
+  spec:
+    ingressClassName: internal-lb
+    tls:
+      - hosts:
+          - icatch.se
+        secretName: tls-secret-icatch-se
+    rules:
+      - host: stg-north1.icatch.se
+        http:
+          paths:
+            - path: /shipment(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-shipment-service
+                  port: 
+                    number: 80
+
+---
+
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    namespace: filesharing
+    name: vltv-file-share-service-ingress
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+  spec:
+    ingressClassName: internal-lb
+    tls:
+      - hosts:
+          - valitive.com
+        secretName: tls-secret-valitive-com
+    rules:
+      - host: stg-fileshare-internal.valitive.com
+        http:
+          paths:
+            - path: /api/v1/settings(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-file-share-app-settings-service
+                  port: 
+                    number: 80
+            - path: /api/v1(/|$)(.*)
+              pathType: Prefix
+              backend:
+                service:
+                  name: vltv-file-share-service
+                  port: 
+                    number: 80
+#add for production /adm deny on public ingress
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: filesharing
+  name: vltv-file-share-ui
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/limit-rpm: "700"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN";
+      add_header X-Content-Type-Options nosniff;
+      add_header Referrer-Policy 'same-origin';
+      add_header X-XSS-Protection "1; mode=block";
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/modsecurity-transaction-id: "$request_id"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecAuditLogFormat JSON
+      SecStatusEngine Off
+      SecAction \
+      "id:949110,\
+        setvar:tx.inbound_anomaly_score_threshold=7,\
+        setvar:tx.outbound_anomaly_score_threshold=4"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - valitive.com
+      secretName: tls-secret-valitive-com
+  rules:
+    - host: stg-fileshare.valitive.com
+      http:
+        paths:
+          - path: /ui(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: vltv-file-share-ui
+                port: 
+                  number: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: mds
+  name: mds-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # kubernetes.io/ingress.class: "nginx-internal"
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-north1.icatch.se
+      http:
+        paths:
+        - path: /mds-log-v1(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: vltv-mds-log-service
+              port: 
+                number: 80
+        - path: /mds-queue-v1(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: vltv-mds-queue-service
+              port:
+                number: 80
+          
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: monitoring
+  name: prometheus-ingress
+  annotations:
+    # kubernetes.io/ingress.class: nginx-internal
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"  
+spec:
+  ingressClassName: internal-lb
+  tls:
+    - hosts:
+        - icatch.se
+      secretName: tls-secret-icatch-se
+  rules:
+    - host: stg-prometheus.icatch.se
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: prometheus-service
+              port:
+                number: 8080
