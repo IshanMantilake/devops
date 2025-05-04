@@ -1,0 +1,89 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: staging
+  region: eu-north-1
+  version: "1.29"
+
+vpc:
+  id: "vpc-0176d7d20c849be18"
+  cidr: "192.162.0.0/16"
+  subnets:
+    private:
+      eu-north-1a:
+        id: "subnet-0f19f27054b7ef685"
+        cidr: "192.162.96.0/19"
+
+      eu-north-1b:
+        id: "subnet-0c7f29966be2e8307"
+        cidr: "192.162.128.0/19"
+
+      eu-north-1c:
+        id: "subnet-02cd5ceac963fb438"
+        cidr: "192.162.160.0/19"
+    public:
+      eu-north-1a:
+        id: "subnet-06fc8eba68854d538"
+        cidr: "192.162.0.0/19"
+
+      eu-north-1b:
+        id: "subnet-0940d974326b394f7"
+        cidr: "192.162.32.0/19"
+
+      eu-north-1c:
+        id: "subnet-0bb0669e3867086b8"
+        cidr: "192.162.64.0/19"
+
+iam:
+  serviceRoleARN: "arn:aws:iam::795538870699:role/eks"
+
+managedNodeGroups:
+
+  - name: ng-general-multi-az
+    labels: { type: general }
+    amiFamily: Bottlerocket
+    instanceType: t3.medium
+    desiredCapacity: 3
+    minSize: 0
+    maxSize: 5
+    #privateNetworking: true
+    ssh:
+      allow: true
+      publicKeyName: eks-bottlerocket-itesco
+    bottlerocket:
+      enableAdminContainer: true
+      settings:
+        kubernetes:
+          system-reserved:
+            cpu: "100m"
+            memory: "100Mi"
+          kube-reserved:
+            cpu: "100m"
+            memory: "100Mi"
+          eviction-hard:
+            "memory.available": "8%"
+
+  - name: ng-general-multi-az-arm
+    labels: { type: arm }
+    amiFamily: Bottlerocket
+    instanceType: t4g.medium
+    desiredCapacity: 0
+    minSize: 0
+    maxSize: 5
+    #privateNetworking: true
+    ssh:
+      allow: true
+      publicKeyName: eks-bottlerocket-itesco
+    bottlerocket:
+      enableAdminContainer: true
+      settings:
+        kubernetes:
+          system-reserved:
+            cpu: "100m"
+            memory: "100Mi"
+          kube-reserved:
+            cpu: "100m"
+            memory: "100Mi"
+          eviction-hard:
+            "memory.available": "5%"
